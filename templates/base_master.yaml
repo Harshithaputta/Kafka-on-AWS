@@ -1,0 +1,495 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Core infrastructure for Zookeeper
+
+Parameters:
+  # Parameters: VPC
+  VpcCidrBlock:
+    Description: CIDR block for the VPC
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 172.16.0.0/16
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
+
+  CidrPublic1:
+    Description: CIDR block for subnet
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 172.16.10.0/24
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
+
+  CidrPublic2:
+    Description: CIDR block for subnet
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 172.16.20.0/24
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
+
+  CidrPrivate1:
+    Description: CIDR block for subnet
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 172.16.30.0/24
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
+
+  CidrPrivate2:
+    Description: CIDR block for subnet
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 172.16.40.0/24
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
+
+  # Parameters: Bastion
+  BastInstanceType:
+    Description: EC2 instance type for Bastion
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+    ConstraintDescription: Must be an allowed EC2 instance type
+
+  BastKeyName:
+    Description: Existing EC2 KeyPair for SSH access
+    Type: "AWS::EC2::KeyPair::KeyName"
+    Default: key-pair-1
+
+  BastAllowedRangeSSH:
+    Description: Allowable IP range for SSH access
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
+
+Mappings:
+  AWSInstanceType2Arch:
+    t1.micro:
+      Arch: PV64
+    m1.small:
+      Arch: PV64
+    m1.medium:
+      Arch: PV64
+    m1.large:
+      Arch: PV64
+    m1.xlarge:
+       Arch: PV64
+    m2.xlarge:
+      Arch: PV64
+    m2.2xlarge:
+      Arch: PV64
+    m2.4xlarge:
+      Arch: PV64
+    c1.medium:
+      Arch: PV64
+    c1.xlarge:
+      Arch: PV64
+    t2.nano:
+      Arch: HVM64
+    t2.micro:
+      Arch: HVM64
+    t2.small:
+      Arch: HVM64
+    t2.medium:
+      Arch: HVM64
+    t2.large:
+      Arch: HVM64
+    m3.medium:
+      Arch: HVM64
+    m3.large:
+      Arch: HVM64
+    m3.xlarge:
+      Arch: HVM64
+    m3.2xlarge:
+      Arch: HVM64
+    m4.large:
+      Arch: HVM64
+    m4.xlarge:
+      Arch: HVM64
+    m4.2xlarge:
+      Arch: HVM64
+    m4.4xlarge:
+      Arch: HVM64
+    m4.10xlarge:
+      Arch: HVM64
+    c3.large:
+      Arch: HVM64
+    c3.xlarge:
+      Arch: HVM64
+    c3.2xlarge:
+      Arch: HVM64
+    c3.4xlarge:
+      Arch: HVM64
+    c3.8xlarge:
+      Arch: HVM64
+    c4.large:
+      Arch: HVM64
+    c4.xlarge:
+      Arch: HVM64
+    c4.2xlarge:
+      Arch: HVM64
+    c4.4xlarge:
+      Arch: HVM64
+    c4.8xlarge:
+      Arch: HVM64
+    g2.2xlarge:
+      Arch: HVM64
+    g2.8xlarge:
+      Arch: HVM64
+    r3.large:
+      Arch: HVM64
+    r3.xlarge:
+      Arch: HVM64
+    r3.2xlarge:
+      Arch: HVM64
+    r3.4xlarge:
+      Arch: HVM64
+    r3.8xlarge:
+      Arch: HVM64
+    r4.large:
+      Arch: HVM64
+    r4.xlarge:
+      Arch: HVM64
+    r4.2xlarge:
+      Arch: HVM64
+    r4.4xlarge:
+      Arch: HVM64
+    r4.8xlarge:
+      Arch: HVM64
+    r4.16xlarge:
+      Arch: HVM64
+    i2.xlarge:
+      Arch: HVM64
+    i2.2xlarge:
+      Arch: HVM64
+    i2.4xlarge:
+      Arch: HVM64
+    i2.8xlarge:
+      Arch: HVM64
+    d2.xlarge:
+      Arch: HVM64
+    d2.2xlarge:
+      Arch: HVM64
+    d2.4xlarge:
+      Arch: HVM64
+    d2.8xlarge:
+      Arch: HVM64
+    hi1.4xlarge:
+      Arch: HVM64
+    hs1.8xlarge:
+      Arch: HVM64
+    cr1.8xlarge:
+      Arch: HVM64
+    cc2.8xlarge:
+      Arch: HVM64
+
+  AWSRegionArch2AMI:
+    us-east-1:
+      PV64: ami-7a3dd76c
+      HVM64: ami-0b33d91d
+      HVMG2: ami-bb18efad
+    us-east-2:
+      PV64: _unsupported
+      HVM64: ami-c55673a0
+      HVMG2: _unsupported
+    us-west-2:
+      PV64: ami-8a72cdea
+      HVM64: ami-f173cc91
+      HVMG2: ami-31912f51
+    us-west-1:
+      PV64: ami-f25a0892
+      HVM64: ami-165a0876
+      HVMG2: ami-0a9dcf6a
+    ca-central-1:
+      PV64: _unsupported
+      HVM64: ami-ebed508f
+      HVMG2: _unsupported
+    eu-west-1:
+      PV64: ami-e0f2af86
+      HVM64: ami-70edb016
+      HVMG2: ami-873e61e1
+    eu-west-2:
+      PV64: _unsupported
+      HVM64: ami-f1949e95
+      HVMG2: _unsupported
+    eu-central-1:
+      PV64: ami-3b0fc054
+      HVM64: ami-af0fc0c0
+      HVMG2: ami-a16ba4ce
+    ap-southeast-1:
+      PV64: ami-2c963c4f
+      HVM64: ami-dc9339bf
+      HVMG2: ami-1c0ba17f
+    ap-northeast-2:
+      PV64: _unsupported
+      HVM64: ami-dac312b4
+      HVMG2: _unsupported
+    ap-northeast-1:
+      PV64: ami-bdd2abda
+      HVM64: ami-56d4ad31
+      HVMG2: ami-6b443f0c
+    ap-southeast-2:
+      PV64: ami-6f47400c
+      HVM64: ami-1c47407f
+      HVMG2: ami-bf0d0adc
+    ap-south-1:
+      PV64: _unsupported
+      HVM64: ami-f9daac96
+      HVMG2: _unsupported
+    sa-east-1:
+      PV64: ami-2a096c46
+      HVM64: ami-80086dec
+      HVMG2: _unsupported
+    cn-north-1:
+      PV64: ami-34c21559
+      HVM64: ami-e6c7108b
+      HVMG2: _unsupported
+    us-gov-west-1:
+      PV64: ami-6d1da60c
+      HVM64: ami-b21fa4d3
+      HVMG2: _unsupported
+
+Resources:
+  CoreVpc:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+      - "Key": "Name"
+        "Value": "KafkaVpc"
+
+  CoreSubnetPublic1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref CoreVpc
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock: !Ref CidrPublic1
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreSubnetPublic1"
+
+  CoreSubnetPublic2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref CoreVpc
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      CidrBlock: !Ref CidrPublic2
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreSubnetPublic2"
+
+  CoreSubnetPrivate1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref CoreVpc
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock: !Ref CidrPrivate1
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreSubnetPrivate1"
+
+  CoreSubnetPrivate2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref CoreVpc
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      CidrBlock: !Ref CidrPrivate2
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreSubnetPrivate2"
+
+  # Public subnets
+  CoreInternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreInternetGateway"
+
+  CoreGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref CoreVpc
+      InternetGatewayId: !Ref CoreInternetGateway
+
+  CoreRouteTablePublic:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref CoreVpc
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreRouteTablePublic"
+
+  CoreRouteTableAssociationPublic1:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref CoreSubnetPublic1
+      RouteTableId: !Ref CoreRouteTablePublic
+
+  CoreRouteTableAssociationPublic2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref CoreSubnetPublic2
+      RouteTableId: !Ref CoreRouteTablePublic
+
+  CoreRoutePublic1:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref CoreRouteTablePublic
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref CoreInternetGateway
+
+  CoreEIP1:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+
+  CoreNATGateway1:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt CoreEIP1.AllocationId
+      SubnetId: !Ref CoreSubnetPublic1
+
+  # Private subnets
+  CoreRouteTablePrivate:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref CoreVpc
+      Tags:
+      - "Key": "Name"
+        "Value": "CoreRouteTablePrivate"
+
+  CoreRoutePrivate1:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref CoreRouteTablePrivate
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref CoreNATGateway1
+
+  CoreRouteTableAssociationPrivate1:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref CoreSubnetPrivate1
+      RouteTableId: !Ref CoreRouteTablePrivate
+
+  CoreRouteTableAssociationPrivate2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref CoreSubnetPrivate2
+      RouteTableId: !Ref CoreRouteTablePrivate
+
+  # Bastion host security group
+  BastSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Bastion host
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref BastAllowedRangeSSH
+      VpcId: !Ref CoreVpc
+
+  # Bastion host role and instance profile
+  BastRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+
+  BastPolicy:
+    Properties:
+      PolicyDocument:
+        Statement:
+        - Action:
+          - ec2:DescribeTags
+          - ec2:CreateTags
+          - ec2:DeleteTags
+          Effect: Allow
+          Resource: "*"
+        Version: '2012-10-17'
+      PolicyName: BastPolicyTags
+      Roles:
+      - !Ref BastRole
+    Type: "AWS::IAM::Policy"
+
+  BastInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: BastRole
+
+  # Bastion instances
+  BastInstance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      IamInstanceProfile: !Ref BastInstanceProfile
+      ImageId: !FindInMap [ AWSRegionArch2AMI, !Ref "AWS::Region", !FindInMap [ AWSInstanceType2Arch, !Ref BastInstanceType, Arch ] ]
+      InstanceType: !Ref BastInstanceType
+      KeyName: !Ref BastKeyName
+      Monitoring: true
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref BastSecurityGroup
+          SubnetId: !Ref CoreSubnetPublic1
+      Tags:
+        - Key: Name
+          Value: Bastion
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install jq -y
+
+Outputs:
+  CoreVpcId:
+    Description: Id of the VPC
+    Value: !Ref CoreVpc
+  CoreSubnetPublic1Id:
+    Description: Id of public subnet 1
+    Value: !Ref CoreSubnetPublic1
+  CoreSubnetPublic2Id:
+    Description: Id of public subnet 2
+    Value: !Ref CoreSubnetPublic2
+  CoreSubnetPrivate1Id:
+    Description: Id of private subnet 1
+    Value: !Ref CoreSubnetPrivate1
+  CoreSubnetPrivate2Id:
+    Description: Id of private subnet 2
+    Value: !Ref CoreSubnetPrivate2
+  BastPublicDnsName:
+    Description: Public DNS for Bastion
+    Value: !GetAtt BastInstance.PublicDnsName
+  BastPublicIp:
+    Description: Public IP address for Bastion
+    Value: !GetAtt BastInstance.PublicIp
+  BastPrivateIp:
+    Description: Private IP address for Bastion
+    Value: !GetAtt BastInstance.PrivateIp

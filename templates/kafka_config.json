@@ -1,0 +1,50 @@
+[
+  {
+    "ParameterKey": "KafkaInstanceType",
+    "ParameterValue": "t2.medium"
+  },
+  {
+    "ParameterKey": "KafkaKeyName",
+    "ParameterValue": "ec2-key-1"
+  },
+  {
+    "ParameterKey": "KafkaVpcId",
+    "ParameterValue": "vpc-fab6f182"
+  },
+  {
+    "ParameterKey": "KafkaSubnetIds",
+    "ParameterValue": "subnet-a2d078ff, subnet-ab3f40cf"
+  },
+  {
+    "ParameterKey": "KafkaDesiredCapacity",
+    "ParameterValue": "3"
+  },
+  {
+    "ParameterKey": "KafkaEbsCapacity",
+    "ParameterValue": "50"
+  },
+  {
+    "ParameterKey": "KafkaMessageRetention",
+    "ParameterValue": "24"
+  },
+  {
+    "ParameterKey": "KafkaBucketName",
+    "ParameterValue": "kafka-configurations-1"
+  },
+  {
+    "ParameterKey": "ZookLoadBalancerName",
+    "ParameterValue": "internal-zookeeper-ZookLoad-KMWJCLUE1MFW-373602425.us-east-1.elb.amazonaws.com"
+  },
+  {
+    "ParameterKey": "KafkaDownloadUrl",
+    "ParameterValue": "http://apache.osuosl.org/kafka/0.11.0.2/kafka_2.11-0.11.0.2.tgz"
+  },
+  {
+    "ParameterKey": "KafkaAllowedRangeApp",
+    "ParameterValue": "0.0.0.0/0"
+  },
+  {
+    "ParameterKey": "KafkaAllowedRangeSSH",
+    "ParameterValue": "0.0.0.0/0"
+  }
+]

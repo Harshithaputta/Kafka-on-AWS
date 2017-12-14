@@ -1,0 +1,38 @@
+[
+  {
+    "ParameterKey": "ZookInstanceType",
+    "ParameterValue": "t2.small"
+  },
+  {
+    "ParameterKey": "ZookKeyName",
+    "ParameterValue": "ec2-key-1"
+  },
+  {
+    "ParameterKey": "ZookVpcId",
+    "ParameterValue": "vpc-fab6f182"
+  },
+  {
+    "ParameterKey": "ZookSubnetIds",
+    "ParameterValue": "subnet-a2d078ff, subnet-ab3f40cf"
+  },
+  {
+    "ParameterKey": "ZookDesiredCapacity",
+    "ParameterValue": "3"
+  },
+  {
+    "ParameterKey": "ZookDownloadUrl",
+    "ParameterValue": "http://apache.osuosl.org/zookeeper/zookeeper-3.4.10/zookeeper-3.4.10.tar.gz"
+  },
+  {
+    "ParameterKey": "ZookAllowedRangeApp",
+    "ParameterValue": "0.0.0.0/0"
+  },
+  {
+    "ParameterKey": "ZookAllowedRangeSSH",
+    "ParameterValue": "0.0.0.0/0"
+  },
+  {
+    "ParameterKey": "ZookBucketName",
+    "ParameterValue": "zookeeper-configurations-1"
+  }
+]
