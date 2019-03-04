@@ -1,0 +1,72 @@
+#!/bin/bash
+yum update -y
+
+# Kafka 10 requires Java 1.8
+yum install java-1.8.0 -y
+
+# Cloudwatch Logs
+yum install awslogs -y
+aws s3 cp s3://higs-public-blog/kafka/config/awslogs_all.conf /etc/awslogs/awslogs.conf
+service awslogs start
+chkconfig awslogs on
+
+# Zookeeper Tarball Installation
+ZOOK_URL=http://apache.osuosl.org/zookeeper/zookeeper-3.4.10/zookeeper-3.4.10.tar.gz
+ZOOK_FILE=`echo $ZOOK_URL | awk -F/ '{print $6}'`
+ZOOK_DIR=`echo $ZOOK_FILE | rev | cut -c 8- | rev`
+cd /tmp && wget -q $ZOOK_URL && tar -zxvf /tmp/$ZOOK_FILE -C /opt
+cd /opt/$ZOOK_DIR
+
+# Zookeeper Settings
+mkdir -p /var/zookeeper
+echo 'tickTime=2000' >> conf/zoo.cfg
+echo 'initLimit=5' >> conf/zoo.cfg
+echo 'syncLimit=2' >> conf/zoo.cfg
+echo 'dataDir=/var/zookeeper' >> conf/zoo.cfg
+echo 'clientPort=2181' >> conf/zoo.cfg
+
+# Zookeeper Orchestration Initialization
+HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/hostname)
+pip install boto3
+mkdir -p /opt/aws/{bin,etc,log,tmp}
+
+# Create 'zookeeper' Service
+aws s3 cp s3://higs-public-blog/kafka/code/init_zookeeper.sh /etc/init.d/zookeeper
+chmod +x /etc/init.d/zookeeper
+sed -i "s:{{ZookDir}}:$ZOOK_DIR:g" /etc/init.d/zookeeper
+
+# Create 'check_zookeeper' Service
+aws s3 cp s3://higs-public-blog/kafka/code/check_zookeeper.py /opt/aws/bin/check_zookeeper.py
+aws s3 cp s3://higs-public-blog/kafka/code/init_check_zookeeper.sh /etc/init.d/check_zookeeper
+chmod +x /etc/init.d/check_zookeeper
+
+# Configure 'register_zookeeper' Utility
+aws s3 cp s3://higs-public-blog/kafka/code/register_asg.py /opt/aws/bin/register_asg.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_ec2.py /opt/aws/bin/register_ec2.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_file.py /opt/aws/bin/register_file.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_queue.py /opt/aws/bin/register_queue.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_util.py /opt/aws/bin/register_util.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_zookeeper.py /opt/aws/bin/register_zookeeper.py
+aws s3 cp s3://higs-public-blog/kafka/config/register_zookeeper.conf /opt/aws/etc/register_zookeeper.conf
+sed -i "s:{{ZookBucket}}:zookeeperharshitha:g" /opt/aws/etc/register_zookeeper.conf
+sed -i "s:{{ZookDir}}:$ZOOK_DIR:g" /opt/aws/etc/register_zookeeper.conf
+sed -i "s;{{ZookQueueInit}};https://sqs.us-west-2.amazonaws.com/156530685687/ZookQueueInit;g" /opt/aws/etc/register_zookeeper.conf
+sed -i "s;{{ZookQueueReplace}};https://sqs.us-west-2.amazonaws.com/156530685687/ZookQueueReplace;g" /opt/aws/etc/register_zookeeper.conf
+python /opt/aws/bin/register_zookeeper.py
+
+# Start Zookeeper
+service zookeeper start
+
+# Perform ensemble configuration
+python /opt/aws/bin/register_zookeeper.py
+
+# Start Zookeeper health check
+service check_zookeeper start
+sleep 10
+
+# Tag the Zookeepers
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep '\"region\"' | cut -d\" -f4)
+ZOOKEEPER_ID=$(cat /var/zookeeper/myid)
+aws ec2 create-tags --region $REGION --resources $INSTANCE_ID --tags Key=ApacheId,Value=$ZOOKEEPER_ID
+aws ec2 describe-tags --region $REGION --filter "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=ApacheId"

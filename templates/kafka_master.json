@@ -1,0 +1,850 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Apache Kafka",
+    "Parameters": {
+        "KafkaInstanceType": {
+            "Description": "EC2 instance type for the Kafka node",
+            "Type": "String",
+            "Default": "d2.xlarge",
+            "AllowedValues": [
+                "m4.large",
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "r3.xlarge",
+                "r4.2xlarge"
+            ],
+            "ConstraintDescription": "Must be an allowed EC2 instance type"
+        },
+        "KafkaKeyName": {
+            "Description": "Existing EC2 KeyPair for SSH access",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "KafkaVpcId": {
+            "Description": "VPC ID in which the EC2 instance will reside",
+            "Type": "AWS::EC2::VPC::Id"
+        },
+        "KafkaSubnetIds": {
+            "Description": "List of subnet ids in which to place instances",
+            "Type": "List<AWS::EC2::Subnet::Id>"
+        },
+        "KafkaDesiredCapacity": {
+            "Description": "Desired number of Kafka instances",
+            "Type": "String"
+        },
+        "KafkaMessageRetention": {
+            "Description": "Retention of Kafka data in hours",
+            "Type": "String",
+            "Default": 24
+        },
+        "KafkaBucketName": {
+            "Description": "Bucket for configurations",
+            "Type": "String"
+        },
+        "ZookLoadBalancerName": {
+            "Description": "Load balancer DNS name for zookeeper",
+            "Type": "String"
+        },
+        "KafkaDownloadUrl": {
+            "Description": "URL from which to download the Kafka tarball",
+            "Type": "String",
+            "Default": "http://apache.osuosl.org/kafka/0.9.0.1/kafka_2.11-0.9.0.1.tgz"
+        },
+        "KafkaAllowedRangeApp": {
+            "Description": "Allowable IP range for application connectivity",
+            "Type": "String",
+            "MinLength": 9,
+            "MaxLength": 18,
+            "Default": "0.0.0.0/0",
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription": "Must be a valid IP CIDR range in the form - x.x.x.x/x"
+        },
+        "KafkaAllowedRangeSSH": {
+            "Description": "Allowable IP range for SSH access",
+            "Type": "String",
+            "MinLength": 9,
+            "MaxLength": 18,
+            "Default": "0.0.0.0/0",
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription": "Must be a valid IP CIDR range in the form - x.x.x.x/x"
+        }
+    },
+    "Mappings": {
+        "AWSInstanceType2Arch": {
+            "t1.micro": {
+                "Arch": "PV64"
+            },
+            "m1.small": {
+                "Arch": "PV64"
+            },
+            "m1.medium": {
+                "Arch": "PV64"
+            },
+            "m1.large": {
+                "Arch": "PV64"
+            },
+            "m1.xlarge": {
+                "Arch": "PV64"
+            },
+            "m2.xlarge": {
+                "Arch": "PV64"
+            },
+            "m2.2xlarge": {
+                "Arch": "PV64"
+            },
+            "m2.4xlarge": {
+                "Arch": "PV64"
+            },
+            "c1.medium": {
+                "Arch": "PV64"
+            },
+            "c1.xlarge": {
+                "Arch": "PV64"
+            },
+            "t2.nano": {
+                "Arch": "HVM64"
+            },
+            "t2.micro": {
+                "Arch": "HVM64"
+            },
+            "t2.small": {
+                "Arch": "HVM64"
+            },
+            "t2.medium": {
+                "Arch": "HVM64"
+            },
+            "t2.large": {
+                "Arch": "HVM64"
+            },
+            "m3.medium": {
+                "Arch": "HVM64"
+            },
+            "m3.large": {
+                "Arch": "HVM64"
+            },
+            "m3.xlarge": {
+                "Arch": "HVM64"
+            },
+            "m3.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "m4.large": {
+                "Arch": "HVM64"
+            },
+            "m4.xlarge": {
+                "Arch": "HVM64"
+            },
+            "m4.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "m4.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "m4.10xlarge": {
+                "Arch": "HVM64"
+            },
+            "c3.large": {
+                "Arch": "HVM64"
+            },
+            "c3.xlarge": {
+                "Arch": "HVM64"
+            },
+            "c3.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "c3.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "c3.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "c4.large": {
+                "Arch": "HVM64"
+            },
+            "c4.xlarge": {
+                "Arch": "HVM64"
+            },
+            "c4.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "c4.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "c4.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "g2.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "g2.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "r3.large": {
+                "Arch": "HVM64"
+            },
+            "r3.xlarge": {
+                "Arch": "HVM64"
+            },
+            "r3.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "r3.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "r3.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "r4.large": {
+                "Arch": "HVM64"
+            },
+            "r4.xlarge": {
+                "Arch": "HVM64"
+            },
+            "r4.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "r4.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "r4.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "r4.16xlarge": {
+                "Arch": "HVM64"
+            },
+            "i2.xlarge": {
+                "Arch": "HVM64"
+            },
+            "i2.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "i2.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "i2.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "d2.xlarge": {
+                "Arch": "HVM64"
+            },
+            "d2.2xlarge": {
+                "Arch": "HVM64"
+            },
+            "d2.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "d2.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "hi1.4xlarge": {
+                "Arch": "HVM64"
+            },
+            "hs1.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "cr1.8xlarge": {
+                "Arch": "HVM64"
+            },
+            "cc2.8xlarge": {
+                "Arch": "HVM64"
+            }
+        },
+        "AWSRegionArch2AMI": {
+            "us-east-1": {
+                "PV64": "ami-7a3dd76c",
+                "HVM64": "ami-0b33d91d",
+                "HVMG2": "ami-bb18efad"
+            },
+            "us-east-2": {
+                "PV64": "_unsupported",
+                "HVM64": "ami-c55673a0",
+                "HVMG2": "_unsupported"
+            },
+            "us-west-2": {
+                "PV64": "ami-8a72cdea",
+                "HVM64": "ami-f173cc91",
+                "HVMG2": "ami-31912f51"
+            },
+            "us-west-1": {
+                "PV64": "ami-f25a0892",
+                "HVM64": "ami-165a0876",
+                "HVMG2": "ami-0a9dcf6a"
+            },
+            "ca-central-1": {
+                "PV64": "_unsupported",
+                "HVM64": "ami-ebed508f",
+                "HVMG2": "_unsupported"
+            },
+            "eu-west-1": {
+                "PV64": "ami-e0f2af86",
+                "HVM64": "ami-70edb016",
+                "HVMG2": "ami-873e61e1"
+            },
+            "eu-west-2": {
+                "PV64": "_unsupported",
+                "HVM64": "ami-f1949e95",
+                "HVMG2": "_unsupported"
+            },
+            "eu-central-1": {
+                "PV64": "ami-3b0fc054",
+                "HVM64": "ami-af0fc0c0",
+                "HVMG2": "ami-a16ba4ce"
+            },
+            "ap-southeast-1": {
+                "PV64": "ami-2c963c4f",
+                "HVM64": "ami-dc9339bf",
+                "HVMG2": "ami-1c0ba17f"
+            },
+            "ap-northeast-2": {
+                "PV64": "_unsupported",
+                "HVM64": "ami-dac312b4",
+                "HVMG2": "_unsupported"
+            },
+            "ap-northeast-1": {
+                "PV64": "ami-bdd2abda",
+                "HVM64": "ami-56d4ad31",
+                "HVMG2": "ami-6b443f0c"
+            },
+            "ap-southeast-2": {
+                "PV64": "ami-6f47400c",
+                "HVM64": "ami-1c47407f",
+                "HVMG2": "ami-bf0d0adc"
+            },
+            "ap-south-1": {
+                "PV64": "_unsupported",
+                "HVM64": "ami-f9daac96",
+                "HVMG2": "_unsupported"
+            },
+            "sa-east-1": {
+                "PV64": "ami-2a096c46",
+                "HVM64": "ami-80086dec",
+                "HVMG2": "_unsupported"
+            },
+            "cn-north-1": {
+                "PV64": "ami-34c21559",
+                "HVM64": "ami-e6c7108b",
+                "HVMG2": "_unsupported"
+            },
+            "us-gov-west-1": {
+                "PV64": "ami-6d1da60c",
+                "HVM64": "ami-b21fa4d3",
+                "HVMG2": "_unsupported"
+            }
+        }
+    },
+    "Resources": {
+        "KafkaBucket": {
+            "Properties": {
+                "BucketName": {
+                    "Ref": "KafkaBucketName"
+                }
+            },
+            "Type": "AWS::S3::Bucket"
+        },
+        "KafkaQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "DelaySeconds": 0,
+                "MessageRetentionPeriod": 600,
+                "QueueName": "KafkaInit",
+                "ReceiveMessageWaitTimeSeconds": 5,
+                "VisibilityTimeout": 1
+            }
+        },
+        "KafkaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Kafka instances",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "KafkaAllowedRangeSSH"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 9092,
+                        "ToPort": 9092,
+                        "CidrIp": {
+                            "Ref": "KafkaAllowedRangeApp"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 2180,
+                        "ToPort": 2180,
+                        "SourceSecurityGroupId": {
+                            "Ref": "KafkaLoadBalancerSecurityGroup"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 9092,
+                        "ToPort": 9092,
+                        "SourceSecurityGroupId": {
+                            "Ref": "KafkaLoadBalancerSecurityGroup"
+                        }
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "KafkaVpcId"
+                }
+            }
+        },
+        "KafkaLoadBalancerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Kafka Kafkaer ELB",
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 2180,
+                        "ToPort": 2180,
+                        "CidrIp": {
+                            "Ref": "KafkaAllowedRangeApp"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 9092,
+                        "ToPort": 9092,
+                        "CidrIp": {
+                            "Ref": "KafkaAllowedRangeApp"
+                        }
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "KafkaVpcId"
+                }
+            }
+        },
+        "KafkaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                },
+                "Path": "/"
+            }
+        },
+        "KafkaPolicy1": {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogStreams"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": [
+                                "arn:aws:logs:*:*:*"
+                            ]
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "PolicyName": "KafkaPolicyLogging",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Policy"
+        },
+        "KafkaPolicy2": {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "cloudwatch:PutMetricData"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": [
+                                "*"
+                            ]
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "PolicyName": "KafkaPolicyCloudwatch",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Policy"
+        },
+        "KafkaPolicy3": {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:s3:::",
+                                        {
+                                            "Ref": "KafkaBucket"
+                                        },
+                                        "/*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "PolicyName": "KafkaPolicyS3",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Policy"
+        },
+        "KafkaPolicy4": {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "ec2:DescribeTags",
+                                "ec2:CreateTags",
+                                "ec2:DeleteTags"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": "*"
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "PolicyName": "KafkaPolicyTags",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Policy"
+        },
+        "KafkaPolicy5": {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sqs:SendMessage",
+                                "sqs:ReceiveMessage",
+                                "sqs:DeleteMessage"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "KafkaQueue",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "PolicyName": "KafkaPolicySQS1",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Policy"
+        },
+        "BastPolicy6": {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "ec2:DescribeInstances",
+                                "elasticloadbalancing:DescribeLoadBalancers",
+                                "autoscaling:DescribeAutoScalingGroups"
+                            ],
+                            "Effect": "Allow",
+                            "Resource": "*"
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "PolicyName": "KafkaPolicyELB",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            },
+            "Type": "AWS::IAM::Policy"
+        },
+        "KafkaInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "KafkaRole"
+                    }
+                ]
+            }
+        },
+        "KafkaLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "ConnectionDrainingPolicy": {
+                    "Enabled": true,
+                    "Timeout": 600
+                },
+                "ConnectionSettings": {
+                    "IdleTimeout": 300
+                },
+                "CrossZone": true,
+                "HealthCheck": {
+                    "HealthyThreshold": "6",
+                    "Interval": "10",
+                    "Target": "HTTP:2180/",
+                    "Timeout": "2",
+                    "UnhealthyThreshold": "2"
+                },
+                "Listeners": [
+                    {
+                        "InstancePort": "2180",
+                        "InstanceProtocol": "HTTP",
+                        "LoadBalancerPort": "2180",
+                        "Protocol": "HTTP"
+                    },
+                    {
+                        "InstancePort": "9092",
+                        "InstanceProtocol": "TCP",
+                        "LoadBalancerPort": "9092",
+                        "Protocol": "TCP"
+                    }
+                ],
+                "Scheme": "internal",
+                "SecurityGroups": [
+                    {
+                        "Ref": "KafkaLoadBalancerSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Fn::Select": [
+                            0,
+                            {
+                                "Ref": "KafkaSubnetIds"
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "KafkaLoadBalancer"
+                    }
+                ]
+            }
+        },
+        "KafkaAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "DesiredCapacity": {
+                    "Ref": "KafkaDesiredCapacity"
+                },
+                "HealthCheckGracePeriod": 300,
+                "HealthCheckType": "EC2",
+                "LaunchConfigurationName": {
+                    "Ref": "KafkaLaunchConfiguration"
+                },
+                "LoadBalancerNames": [
+                    {
+                        "Ref": "KafkaLoadBalancer"
+                    }
+                ],
+                "MaxSize": 90,
+                "MetricsCollection": [
+                    {
+                        "Granularity": "1Minute"
+                    }
+                ],
+                "MinSize": 1,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "PropagateAtLaunch": true,
+                        "Value": "Kafka"
+                    }
+                ],
+                "VPCZoneIdentifier": [
+                    {
+                        "Fn::Select": [
+                            0,
+                            {
+                                "Ref": "KafkaSubnetIds"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "KafkaLaunchConfiguration": {
+            "Type": "AWS::AutoScaling::LaunchConfiguration",
+            "Properties": {
+                "AssociatePublicIpAddress": false,
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sdf",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "Encrypted": true,
+                            "VolumeSize": {
+                                "Ref": "KafkaEbsCapacity"
+                            },
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/sdg",
+                        "Ebs": {
+                            "DeleteOnTermination": true,
+                            "Encrypted": true,
+                            "VolumeSize": {
+                                "Ref": "KafkaEbsCapacity"
+                            },
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+                "IamInstanceProfile": {
+                    "Ref": "KafkaInstanceProfile"
+                },
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap": [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref": "KafkaInstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceMonitoring": true,
+                "InstanceType": {
+                    "Ref": "KafkaInstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KafkaKeyName"
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "KafkaSecurityGroup"
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\n\n# Kafka 10 requires Java 1.8\nyum install java-1.8.0 -y\n\n# Cloudwatch Logs\nyum install awslogs -y\naws s3 cp s3://higs-public-blog/kafka/config/awslogs_all.conf /etc/awslogs/awslogs.conf\nservice awslogs start\nchkconfig awslogs on\n\n# Kafka Logical Volume\npvcreate /dev/xvdf /dev/xvdg\nvgcreate vg_kafka /dev/xvdf /dev/xvdg\nlvcreate -l 100%FREE -i 2 -I 256KB vg_kafka -n lv_kafka\nmkfs.ext4 /dev/vg_kafka/lv_kafka\nmkdir /kafka\necho -e '/dev/vg_kafka/lv_kafka\\t/kafka\\text4\\trw,noatime,discard\\t0\\t0' >> /etc/fstab\nmount -a\nrm -rf /kafka/lost+found\n\n# Kafka Tarball Installation\nKAFKA_URL=${KafkaDownloadUrl}\nKAFKA_FILE=`echo $KAFKA_URL | awk -F/ '{print $6}'`\nKAFKA_DIR=`echo $KAFKA_FILE | rev | cut -c 5- | rev`\ncd /tmp && wget -q $KAFKA_URL && tar -zxvf /tmp/$KAFKA_FILE -C /opt\ncd /opt/$KAFKA_DIR\n\n# Kafka Orchestration Initialization\nHOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/hostname)\npip install boto3\nmkdir -p /opt/aws/{bin,etc,log,tmp}\n\n# Create 'Kafka' Service\naws s3 cp s3://higs-public-blog/kafka/code/init_kafka.sh /etc/init.d/kafka\nchmod +x /etc/init.d/kafka\nsed -i \"s:{{KafkaDir}}:$KAFKA_DIR:g\" /etc/init.d/kafka\n\n# Create 'check_kafka' Service\naws s3 cp s3://higs-public-blog/kafka/code/check_kafka.py /opt/aws/bin/check_kafka.py\naws s3 cp s3://higs-public-blog/kafka/code/init_check_kafka.sh /etc/init.d/check_kafka\nchmod +x /etc/init.d/check_kafka\n\n# Configure 'register_Kafkaer' Utility\naws s3 cp s3://higs-public-blog/kafka/code/register_asg.py /opt/aws/bin/register_asg.py\naws s3 cp s3://higs-public-blog/kafka/code/register_ec2.py /opt/aws/bin/register_ec2.py\naws s3 cp s3://higs-public-blog/kafka/code/register_file.py /opt/aws/bin/register_file.py\naws s3 cp s3://higs-public-blog/kafka/code/register_queue.py /opt/aws/bin/register_queue.py\naws s3 cp s3://higs-public-blog/kafka/code/register_util.py /opt/aws/bin/register_util.py\naws s3 cp s3://higs-public-blog/kafka/code/register_kafka.py /opt/aws/bin/register_kafka.py\naws s3 cp s3://higs-public-blog/kafka/code/register_kafka_tag.py /opt/aws/bin/register_kafka_tag.py\naws s3 cp s3://higs-public-blog/kafka/config/register_kafka.conf /opt/aws/etc/register_kafka.conf\nsed -i \"s:{{KafkaBucket}}:${KafkaBucket}:g\" /opt/aws/etc/register_kafka.conf\nsed -i \"s;{{KafkaDir}};$KAFKA_DIR;g\" /opt/aws/etc/register_kafka.conf\nsed -i \"s;{{KafkaQueue}};${KafkaQueue};g\" /opt/aws/etc/register_kafka.conf\nsed -i \"s:{{ZookLoadBalancerName}}:${ZookLoadBalancerName}:g\" /opt/aws/etc/register_kafka.conf\npython /opt/aws/bin/register_kafka.py\n\n# Kafka Settings\nHOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/hostname)\nAZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)\nsed -i 's/broker.id=0/#broker.id=0/'  /opt/$KAFKA_DIR/config/server.properties\nsed -i 's/log.retention.hours=168/log.retention.hours=${KafkaMessageRetention}/' /opt/$KAFKA_DIR/config/server.properties\nsed -i \"s/zookeeper.connect=localhost/zookeeper.connect=${ZookLoadBalancerName}/\" /opt/$KAFKA_DIR/config/server.properties\nsed -i 's/log.dirs=\\/tmp\\/kafka-logs/log.dirs=\\/kafka/' /opt/$KAFKA_DIR/config/server.properties\nsed -i \"s/  KAFKA_JMX_OPTS=\\\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false \\\"/  KAFKA_JMX_OPTS=\\\"-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=$HOSTNAME -Djava.net.preferIPv4Stack=true\\\"/\" /opt/$KAFKA_DIR/bin/kafka-run-class.sh\necho '' >> /opt/$KAFKA_DIR/config/server.properties\necho '# Enable auto-generation of broker ids' >> /opt/$KAFKA_DIR/config/server.properties\necho 'broker.id.generation.enable=true' >> /opt/$KAFKA_DIR/config/server.properties\necho '' >> /opt/$KAFKA_DIR/config/server.properties\necho '# Setup availability zone awareness' >> /opt/$KAFKA_DIR/config/server.properties\necho \"broker.rack=$AZ\" >> /opt/$KAFKA_DIR/config/server.properties\necho '' >> /opt/$KAFKA_DIR/config/server.properties\necho '# Reliability settings' >> /opt/$KAFKA_DIR/config/server.properties\necho 'acks=all' >> /opt/$KAFKA_DIR/config/server.properties\necho 'default.replication.factor=3' >> /opt/$KAFKA_DIR/config/server.properties\necho 'max.in.flight.requests.per.connection=1' >> /opt/$KAFKA_DIR/config/server.properties\necho 'min.insync.replicas=2' >> /opt/$KAFKA_DIR/config/server.properties\necho 'unclean.leader.election.enable=false' >> /opt/$KAFKA_DIR/config/server.properties\necho '' >> /opt/$KAFKA_DIR/config/server.properties\necho '# Performance settings' >> /opt/$KAFKA_DIR/config/server.properties\necho 'num.replica.fetchers=2' >> /opt/$KAFKA_DIR/config/server.properties\n\n# Start services\nservice kafka start\nservice check_kafka start\nsleep 10\n\npython /opt/aws/bin/register_kafka_tag.py\n\n# Tag the Kafka instances\n# INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\n# REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep '\\\"region\\\"' | cut -d\\\" -f4)\n# KafkaER_ID=$(cat /kafka/meta.properties | grep Kafkaer.id | awk -F= '{print $2}')\n# aws ec2 create-tags --region $REGION --resources $INSTANCE_ID --tags Key=ApacheId,Value=$KafkaER_ID\n# aws ec2 describe-tags --region $REGION --filter \"Name=resource-id,Values=$INSTANCE_ID\" \"Name=key,Values=ApacheId\"\n"
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "KafkaSecurityGroupId": {
+            "Description": "Security group ID for Kafka",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KafkaSecurityGroup",
+                    "GroupId"
+                ]
+            }
+        },
+        "KafkaLoadBalancerSecurityGroupId": {
+            "Description": "Security group ID for Kafka ELB",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KafkaLoadBalancerSecurityGroup",
+                    "GroupId"
+                ]
+            }
+        },
+        "KafkaQueueUrl": {
+            "Description": "SQS Queue URL",
+            "Value": {
+                "Ref": "KafkaQueue"
+            }
+        },
+        "KafkaQueueArn": {
+            "Description": "SQS Queue ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KafkaQueue",
+                    "Arn"
+                ]
+            }
+        },
+        "KafkaQueueName": {
+            "Description": "SQS Queue Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KafkaQueue",
+                    "QueueName"
+                ]
+            }
+        },
+        "KafkaLoadBalancerId": {
+            "Description": "Load balancer ID for Kafkaers",
+            "Value": {
+                "Ref": "KafkaLoadBalancer"
+            }
+        },
+        "KafkaLoadBalancerName": {
+            "Description": "Load balancer DNS name for Kafkaers",
+            "Value": {
+                "Fn::GetAtt": [
+                    "KafkaLoadBalancer",
+                    "DNSName"
+                ]
+            }
+        }
+    }
+}

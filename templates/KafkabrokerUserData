@@ -1,0 +1,97 @@
+#!/bin/bash
+yum update -y
+
+# Kafka 10 requires Java 1.8
+yum install java-1.8.0 -y
+
+# Cloudwatch Logs
+yum install awslogs -y
+aws s3 cp s3://higs-public-blog/kafka/config/awslogs_all.conf /etc/awslogs/awslogs.conf
+service awslogs start
+chkconfig awslogs on
+
+# Kafka Logical Volume
+pvcreate /dev/xvdf /dev/xvdg
+vgcreate vg_kafka /dev/xvdf /dev/xvdg
+lvcreate -l 100%FREE -i 2 -I 256KB vg_kafka -n lv_kafka
+mkfs.ext4 /dev/vg_kafka/lv_kafka
+mkdir /kafka
+echo -e '/dev/vg_kafka/lv_kafka\t/kafka\text4\trw,noatime,discard\t0\t0' >> /etc/fstab
+mount -a
+rm -rf /kafka/lost+found
+
+# Kafka Tarball Installation
+KAFKA_URL=http://apache.osuosl.org/kafka/0.9.0.1/kafka_2.11-0.9.0.1.tgz
+KAFKA_FILE=`echo $KAFKA_URL | awk -F/ '{print $6}'`
+KAFKA_DIR=`echo $KAFKA_FILE | rev | cut -c 5- | rev`
+cd /tmp && wget -q $KAFKA_URL && tar -zxvf /tmp/$KAFKA_FILE -C /opt
+cd /opt/$KAFKA_DIR
+
+# Kafka Orchestration Initialization
+HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/hostname)
+pip install boto3
+mkdir -p /opt/aws/{bin,etc,log,tmp}
+
+# Create 'Kafka' Service
+aws s3 cp s3://higs-public-blog/kafka/code/init_kafka.sh /etc/init.d/kafka
+chmod +x /etc/init.d/kafka
+sed -i "s:{{KafkaDir}}:$KAFKA_DIR:g" /etc/init.d/kafka
+
+# Create 'check_kafka' Service
+aws s3 cp s3://higs-public-blog/kafka/code/check_kafka.py /opt/aws/bin/check_kafka.py
+aws s3 cp s3://higs-public-blog/kafka/code/init_check_kafka.sh /etc/init.d/check_kafka
+chmod +x /etc/init.d/check_kafka
+
+# Configure 'register_Kafkaer' Utility
+aws s3 cp s3://higs-public-blog/kafka/code/register_asg.py /opt/aws/bin/register_asg.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_ec2.py /opt/aws/bin/register_ec2.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_file.py /opt/aws/bin/register_file.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_queue.py /opt/aws/bin/register_queue.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_util.py /opt/aws/bin/register_util.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_kafka.py /opt/aws/bin/register_kafka.py
+aws s3 cp s3://higs-public-blog/kafka/code/register_kafka_tag.py /opt/aws/bin/register_kafka_tag.py
+aws s3 cp s3://higs-public-blog/kafka/config/register_kafka.conf /opt/aws/etc/register_kafka.conf
+sed -i "s:{{KafkaBucket}}:kafkaharshitha:g" /opt/aws/etc/register_kafka.conf
+sed -i "s;{{KafkaDir}};$KAFKA_DIR;g" /opt/aws/etc/register_kafka.conf
+sed -i "s;{{KafkaQueue}};https://sqs.us-west-2.amazonaws.com/156530685687/KafkaInit;g" /opt/aws/etc/register_kafka.conf
+sed -i "s:{{ZookLoadBalancerName}}:internal-zookeeper-ZookLoad-1LJLTHY2F91AV-1321332821.us-west-2.elb.amazonaws.com:g" /opt/aws/etc/register_kafka.conf
+python /opt/aws/bin/register_kafka.py
+
+# Kafka Settings
+HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/hostname)
+AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+sed -i 's/broker.id=0/#broker.id=0/'  /opt/$KAFKA_DIR/config/server.properties
+sed -i 's/log.retention.hours=168/log.retention.hours=24/' /opt/$KAFKA_DIR/config/server.properties
+sed -i "s/zookeeper.connect=localhost/zookeeper.connect=internal-zookeeper-ZookLoad-1LJLTHY2F91AV-1321332821.us-west-2.elb.amazonaws.com/" /opt/$KAFKA_DIR/config/server.properties
+sed -i 's/log.dirs=\/tmp\/kafka-logs/log.dirs=\/kafka/' /opt/$KAFKA_DIR/config/server.properties
+sed -i "s/  KAFKA_JMX_OPTS=\"-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false \"/  KAFKA_JMX_OPTS=\"-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=$HOSTNAME -Djava.net.preferIPv4Stack=true\"/" /opt/$KAFKA_DIR/bin/kafka-run-class.sh
+echo '' >> /opt/$KAFKA_DIR/config/server.properties
+echo '# Enable auto-generation of broker ids' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'broker.id.generation.enable=true' >> /opt/$KAFKA_DIR/config/server.properties
+echo '' >> /opt/$KAFKA_DIR/config/server.properties
+echo '# Setup availability zone awareness' >> /opt/$KAFKA_DIR/config/server.properties
+echo "broker.rack=$AZ" >> /opt/$KAFKA_DIR/config/server.properties
+echo '' >> /opt/$KAFKA_DIR/config/server.properties
+echo '# Reliability settings' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'acks=all' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'default.replication.factor=3' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'max.in.flight.requests.per.connection=1' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'min.insync.replicas=2' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'unclean.leader.election.enable=false' >> /opt/$KAFKA_DIR/config/server.properties
+echo '' >> /opt/$KAFKA_DIR/config/server.properties
+echo '# Performance settings' >> /opt/$KAFKA_DIR/config/server.properties
+echo 'num.replica.fetchers=2' >> /opt/$KAFKA_DIR/config/server.properties
+
+# Start services
+service kafka start
+service check_kafka start
+sleep 10
+
+python /opt/aws/bin/register_kafka_tag.py
+
+# Tag the Kafka instances
+# INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+# REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep '\"region\"' | cut -d\" -f4)
+# KafkaER_ID=$(cat /kafka/meta.properties | grep Kafkaer.id | awk -F= '{print $2}')
+# aws ec2 create-tags --region $REGION --resources $INSTANCE_ID --tags Key=ApacheId,Value=$KafkaER_ID
+# aws ec2 describe-tags --region $REGION --filter "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=ApacheId"
