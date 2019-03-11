@@ -1,9 +1,6 @@
-AWSTemplateFormatVersion: "2010-09-09"
-
+AWSTemplateFormatVersion: 2010-09-09
 Description: Apache Zookeeper
-
 Parameters:
-  # Parameters: Instance
   ZookInstanceType:
     Description: EC2 instance type for the Zookeeper node
     Type: String
@@ -17,52 +14,41 @@ Parameters:
       - m4.2xlarge
       - m4.4xlarge
     ConstraintDescription: Must be an allowed EC2 instance type
-
   ZookKeyName:
     Description: Existing EC2 KeyPair for SSH access
-    Type: "AWS::EC2::KeyPair::KeyName"
-
+    Type: 'AWS::EC2::KeyPair::KeyName'
   ZookVpcId:
     Description: VPC ID in which the EC2 instance will reside
-    Type: "AWS::EC2::VPC::Id"
-
+    Type: 'AWS::EC2::VPC::Id'
   ZookSubnetIds:
     Description: List of subnet ids in which to place instances
-    Type: "List<AWS::EC2::Subnet::Id>"
-
+    Type: 'List<AWS::EC2::Subnet::Id>'
   ZookDesiredCapacity:
     Description: Desired number of Zookeeper instances
     Type: String
-
   ZookBucketName:
     Description: Bucket for configurations
     Type: String
-
-  # Parameters: Download
   ZookDownloadUrl:
     Description: URL from which to download the Kafka tarball
     Type: String
     Default: http://apache.osuosl.org/zookeeper/zookeeper-3.4.13/zookeeper-3.4.13.tar.gz
-
-  # Parameters: Security groups
   ZookAllowedRangeApp:
     Description: Allowable IP range for application connectivity
     Type: String
     MinLength: 9
     MaxLength: 18
     Default: 0.0.0.0/0
-    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
     ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
-
   ZookAllowedRangeSSH:
     Description: Allowable IP range for SSH access
     Type: String
     MinLength: 9
     MaxLength: 18
     Default: 0.0.0.0/0
-    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
     ConstraintDescription: Must be a valid IP CIDR range in the form - x.x.x.x/x
-
 Mappings:
   AWSInstanceType2Arch:
     t1.micro:
@@ -74,7 +60,7 @@ Mappings:
     m1.large:
       Arch: PV64
     m1.xlarge:
-       Arch: PV64
+      Arch: PV64
     m2.xlarge:
       Arch: PV64
     m2.2xlarge:
@@ -183,12 +169,11 @@ Mappings:
       Arch: HVM64
     cc2.8xlarge:
       Arch: HVM64
-
   AWSRegionArch2AMI:
     us-east-1:
-      PV64: ami-0d19f5402a2c1c6bc
-      HVM64: ami-0d19f5402a2c1c6bc
-      HVMG2: ami-0d19f5402a2c1c6bc
+      PV64: ami-7a3dd76c
+      HVM64: ami-0b33d91d
+      HVMG2: ami-bb18efad
     us-east-2:
       PV64: _unsupported
       HVM64: ami-c55673a0
@@ -249,36 +234,29 @@ Mappings:
       PV64: ami-6d1da60c
       HVM64: ami-b21fa4d3
       HVMG2: _unsupported
-
 Resources:
-  # S3 bucket
   ZookBucket:
     Properties:
       BucketName: !Ref ZookBucketName
-    Type: "AWS::S3::Bucket"
-
-  # SQS queues
+    Type: 'AWS::S3::Bucket'
   ZookQueueInit:
-    Type: "AWS::SQS::Queue"
+    Type: 'AWS::SQS::Queue'
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 600
       QueueName: ZookQueueInit
       ReceiveMessageWaitTimeSeconds: 5
-      VisibilityTimeout: 0
-
+      VisibilityTimeout: 1
   ZookQueueReplace:
-    Type: "AWS::SQS::Queue"
+    Type: 'AWS::SQS::Queue'
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 600
       QueueName: ZookQueueReplace
       ReceiveMessageWaitTimeSeconds: 5
-      VisibilityTimeout: 0
-
-  # Security groups
+      VisibilityTimeout: 1
   ZookSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: Zookeeper
       SecurityGroupIngress:
@@ -306,33 +284,25 @@ Resources:
           FromPort: 2181
           ToPort: 2181
           SourceSecurityGroupId: !Ref ZookLoadBalancerSecurityGroup
-        # TODO: Will need to add this later for Kafka
-        # - IpProtocol: tcp
-        #   FromPort: 2181
-        #   ToPort: 2181
-        #   SourceSecurityGroupId: !Ref KafkaSecurityGroup
       VpcId: !Ref ZookVpcId
-
   ZookInternal:
-    Type: "AWS::EC2::SecurityGroupIngress"
+    Type: 'AWS::EC2::SecurityGroupIngress'
     Properties:
       IpProtocol: tcp
       FromPort: 2888
       ToPort: 2888
       SourceSecurityGroupId: !Ref ZookSecurityGroup
       GroupId: !Ref ZookSecurityGroup
-
   ZookLeaderElection:
-    Type: "AWS::EC2::SecurityGroupIngress"
+    Type: 'AWS::EC2::SecurityGroupIngress'
     Properties:
       IpProtocol: tcp
       FromPort: 3888
       ToPort: 3888
       SourceSecurityGroupId: !Ref ZookSecurityGroup
       GroupId: !Ref ZookSecurityGroup
-
   ZookLoadBalancerSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: 'AWS::EC2::SecurityGroup'
     Properties:
       GroupDescription: Zookeeper ELB
       SecurityGroupIngress:
@@ -344,145 +314,141 @@ Resources:
           FromPort: 2181
           ToPort: 2181
           CidrIp: !Ref ZookAllowedRangeApp
-        # TODO: Will need to add this later for Kafka
-        # - IpProtocol: tcp
-        #   FromPort: 2181
-        #   ToPort: 2181
-        #   SourceSecurityGroupId: !Ref KafkaSecurityGroup
       VpcId: !Ref ZookVpcId
-
   ZookLoadBalancerInternal:
-    Type: "AWS::EC2::SecurityGroupIngress"
+    Type: 'AWS::EC2::SecurityGroupIngress'
     Properties:
       IpProtocol: tcp
       FromPort: 2181
       ToPort: 2181
       SourceSecurityGroupId: !Ref ZookSecurityGroup
       GroupId: !Ref ZookLoadBalancerSecurityGroup
-
-  # Roles
   ZookRole:
-    Type: "AWS::IAM::Role"
+    Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - ec2.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Path: "/"
-
-  # Policies
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
   ZookPolicy1:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - logs:CreateLogGroup
-          - logs:CreateLogStream
-          - logs:PutLogEvents
-          - logs:DescribeLogStreams
-          Effect: Allow
-          Resource:
-          - arn:aws:logs:*:*:*
-        Version: '2012-10-17'
+          - Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogStreams'
+            Effect: Allow
+            Resource:
+              - 'arn:aws:logs:*:*:*'
+        Version: 2012-10-17
       PolicyName: ZookPolicyLogging
       Roles:
-      - !Ref ZookRole
-    Type: "AWS::IAM::Policy"
-
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy2:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - cloudwatch:PutMetricData
-          Effect: Allow
-          Resource:
-          - '*'
-        Version: '2012-10-17'
+          - Action:
+              - 'cloudwatch:PutMetricData'
+            Effect: Allow
+            Resource:
+              - '*'
+        Version: 2012-10-17
       PolicyName: ZookPolicyCloudwatch
       Roles:
-      - Ref: ZookRole
-    Type: "AWS::IAM::Policy"
-
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy3:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - s3:GetObject
-          - s3:PutObject
-          Effect: Allow
-          Resource: !Join [ '', [ 'arn:aws:s3:::', !Ref ZookBucket, '/*' ] ]
-        Version: '2012-10-17'
+          - Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref ZookBucket
+                - /*
+        Version: 2012-10-17
       PolicyName: ZookPolicyS3
       Roles:
-      - !Ref ZookRole
-    Type: "AWS::IAM::Policy"
-
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy4:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - ec2:DescribeTags
-          - ec2:CreateTags
-          - ec2:DeleteTags
-          Effect: Allow
-          Resource: '*'
-        Version: '2012-10-17'
+          - Action:
+              - 'ec2:DescribeTags'
+              - 'ec2:CreateTags'
+              - 'ec2:DeleteTags'
+            Effect: Allow
+            Resource: '*'
+        Version: 2012-10-17
       PolicyName: ZookPolicyTags
       Roles:
-      - !Ref ZookRole
-    Type: "AWS::IAM::Policy"
-
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy5:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - sqs:*
-          Effect: Allow
-          Resource: !GetAtt ZookQueueInit.Arn
-        Version: '2012-10-17'
+          - Action:
+              - 'sqs:SendMessage'
+              - 'sqs:ReceiveMessage'
+              - 'sqs:DeleteMessage'
+            Effect: Allow
+            Resource: !GetAtt
+              - ZookQueueInit
+              - Arn
+        Version: 2012-10-17
       PolicyName: ZookPolicySQS1
       Roles:
-      - !Ref ZookRole
-    Type: "AWS::IAM::Policy"
-
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy6:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - sqs:*
-          Effect: Allow
-          Resource: !GetAtt ZookQueueReplace.Arn
-        Version: '2012-10-17'
+          - Action:
+              - 'sqs:SendMessage'
+              - 'sqs:ReceiveMessage'
+              - 'sqs:DeleteMessage'
+            Effect: Allow
+            Resource: !GetAtt
+              - ZookQueueReplace
+              - Arn
+        Version: 2012-10-17
       PolicyName: ZookPolicySQS2
       Roles:
-      - !Ref ZookRole
-    Type: "AWS::IAM::Policy"
-
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy7:
     Properties:
       PolicyDocument:
         Statement:
-        - Action:
-          - ec2:DescribeInstances
-          - elasticloadbalancing:DescribeLoadBalancers
-          - autoscaling:DescribeAutoScalingGroups
-          Effect: Allow
-          Resource: "*"
-        Version: '2012-10-17'
+          - Action:
+              - 'ec2:DescribeInstances'
+              - 'elasticloadbalancing:DescribeLoadBalancers'
+              - 'autoscaling:DescribeAutoScalingGroups'
+            Effect: Allow
+            Resource: '*'
+        Version: 2012-10-17
       PolicyName: ZookPolicyELB
       Roles:
-      - !Ref ZookRole
-    Type: "AWS::IAM::Policy"
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
   ZookPolicy8:
     Properties:
       PolicyDocument:
@@ -493,25 +459,21 @@ Resources:
             Resource: !Join
               - ''
               - - 'arn:aws:s3:::'
-                - 'higs-public-blog/kafka'
+                - 'higs-public-blog'
                 - /*
         Version: 2012-10-17
       PolicyName: ZookPolicyS3Get
       Roles:
         - !Ref ZookRole
     Type: 'AWS::IAM::Policy'
-
-  # Instance Profiles
   ZookInstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
+    Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      Path: "/"
+      Path: /
       Roles:
-      - Ref: ZookRole
-
-  # ELB
+        - !Ref ZookRole
   ZookLoadBalancer:
-    Type: "AWS::ElasticLoadBalancing::LoadBalancer"
+    Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
     Properties:
       ConnectionDrainingPolicy:
         Enabled: true
@@ -522,167 +484,267 @@ Resources:
       HealthCheck:
         HealthyThreshold: '6'
         Interval: '10'
-        Target: HTTP:2180/
+        Target: 'HTTP:2180/'
         Timeout: '2'
         UnhealthyThreshold: '2'
       Listeners:
-      - InstancePort: '2180'
-        InstanceProtocol: HTTP
-        LoadBalancerPort: '2180'
-        Protocol: HTTP
-      - InstancePort: '2181'
-        InstanceProtocol: TCP
-        LoadBalancerPort: '2181'
-        Protocol: TCP
+        - InstancePort: '2180'
+          InstanceProtocol: HTTP
+          LoadBalancerPort: '2180'
+          Protocol: HTTP
+        - InstancePort: '2181'
+          InstanceProtocol: TCP
+          LoadBalancerPort: '2181'
+          Protocol: TCP
       Scheme: internal
       SecurityGroups:
-      - !Ref ZookLoadBalancerSecurityGroup
+        - !Ref ZookLoadBalancerSecurityGroup
       Subnets:
-      - !Select [ 0, !Ref ZookSubnetIds ]
+        - !Select
+          - 0
+          - !Ref ZookSubnetIds
       Tags:
-      - Key: Name
-        Value: ZookLoadBalancer
-
-  # ASG and Launch Configuration
+        - Key: Name
+          Value: ZookLoadBalancer
   ZookAutoScalingGroup:
-    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
       DesiredCapacity: !Ref ZookDesiredCapacity
       HealthCheckGracePeriod: 300
       HealthCheckType: ELB
       LaunchConfigurationName: !Ref ZookLaunchConfiguration
       LoadBalancerNames:
-       - !Ref ZookLoadBalancer
+        - !Ref ZookLoadBalancer
       MaxSize: 9
       MetricsCollection:
-      - Granularity: 1Minute
+        - Granularity: 1Minute
       MinSize: 1
       Tags:
-      - Key: Name
-        PropagateAtLaunch: true
-        Value: Zookeeper
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: Zookeeper
       VPCZoneIdentifier:
-      - !Select [ 0, !Ref ZookSubnetIds ]
-
+        - !Select
+          - 0
+          - !Ref ZookSubnetIds
   ZookLaunchConfiguration:
-    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
     Properties:
-      AssociatePublicIpAddress: true
+      AssociatePublicIpAddress: false
       IamInstanceProfile: !Ref ZookInstanceProfile
-      ImageId: !FindInMap [ AWSRegionArch2AMI, !Ref "AWS::Region", !FindInMap [ AWSInstanceType2Arch, !Ref ZookInstanceType, Arch ] ]
+      ImageId: !FindInMap
+        - AWSRegionArch2AMI
+        - !Ref 'AWS::Region'
+        - !FindInMap
+          - AWSInstanceType2Arch
+          - !Ref ZookInstanceType
+          - Arch
       InstanceMonitoring: true
       InstanceType: !Ref ZookInstanceType
       KeyName: !Ref ZookKeyName
       SecurityGroups:
-      - !Ref ZookSecurityGroup
-      UserData:
-        Fn::Base64: !Sub |
+        - !Ref ZookSecurityGroup
+      UserData: !Base64
+        'Fn::Sub': >
           #!/bin/bash
+
           yum update -y
 
+
           # Kafka 10 requires Java 1.8
+
           yum install java-1.8.0 -y
+
           yum install python-pip python3-wheel -y
 
           pip install boto3
 
-          yum install nmap-ncat -y
 
           # Cloudwatch Logs
+
           yum install awslogs -y
-          aws s3 cp s3://higs-public-blog/kafka/config/awslogs_all.conf /etc/awslogs/awslogs.conf
+
+          aws s3 cp s3://higs-public-blog/kafka/config/awslogs_all.conf
+          /etc/awslogs/awslogs.conf
+
           service awslogs start
+
           chkconfig awslogs on
 
+
           # Zookeeper Tarball Installation
+
           ZOOK_URL=${ZookDownloadUrl}
+
           ZOOK_FILE=`echo $ZOOK_URL | awk -F/ '{print $6}'`
+
           ZOOK_DIR=`echo $ZOOK_FILE | rev | cut -c 8- | rev`
+
           cd /tmp && wget -q $ZOOK_URL && tar -zxvf /tmp/$ZOOK_FILE -C /opt
+
           cd /opt/$ZOOK_DIR
 
+
           # Zookeeper Settings
+
           mkdir -p /var/zookeeper
+
+          cp
+
           echo 'tickTime=2000' >> conf/zoo.cfg
+
           echo 'initLimit=5' >> conf/zoo.cfg
+
           echo 'syncLimit=2' >> conf/zoo.cfg
+
           echo 'dataDir=/var/zookeeper' >> conf/zoo.cfg
+
           echo 'clientPort=2181' >> conf/zoo.cfg
 
+
           # Zookeeper Orchestration Initialization
+
           HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/hostname)
+
           pip install boto3
+
           mkdir -p /opt/aws/{bin,etc,log,tmp}
 
+
           # Create 'zookeeper' Service
-          aws s3 cp s3://higs-public-blog/kafka/code/init_zookeeper.sh /etc/init.d/zookeeper
+
+          aws s3 cp s3://higs-public-blog/kafka/code/init_zookeeper.sh
+          /etc/init.d/zookeeper
+
           chmod +x /etc/init.d/zookeeper
+
           sed -i "s:{{ZookDir}}:$ZOOK_DIR:g" /etc/init.d/zookeeper
 
+
           # Create 'check_zookeeper' Service
-          aws s3 cp s3://higs-public-blog/kafka/code/check_zookeeper.py /opt/aws/bin/check_zookeeper.py
-          aws s3 cp s3://higs-public-blog/kafka/code/init_check_zookeeper.sh /etc/init.d/check_zookeeper
+
+          aws s3 cp s3://higs-public-blog/kafka/code/check_zookeeper.py
+          /opt/aws/bin/check_zookeeper.py
+
+          aws s3 cp s3://higs-public-blog/kafka/code/init_check_zookeeper.sh
+          /etc/init.d/check_zookeeper
+
           chmod +x /etc/init.d/check_zookeeper
 
+
           # Configure 'register_zookeeper' Utility
-          aws s3 cp s3://higs-public-blog/kafka/code/register_asg.py /opt/aws/bin/register_asg.py
-          aws s3 cp s3://higs-public-blog/kafka/code/register_ec2.py /opt/aws/bin/register_ec2.py
-          aws s3 cp s3://higs-public-blog/kafka/code/register_file.py /opt/aws/bin/register_file.py
-          aws s3 cp s3://higs-public-blog/kafka/code/register_queue.py /opt/aws/bin/register_queue.py
-          aws s3 cp s3://higs-public-blog/kafka/code/register_util.py /opt/aws/bin/register_util.py
-          aws s3 cp s3://higs-public-blog/kafka/code/register_zookeeper.py /opt/aws/bin/register_zookeeper.py
-          aws s3 cp s3://higs-public-blog/kafka/config/register_zookeeper.conf /opt/aws/etc/register_zookeeper.conf
-          sed -i "s:{{ZookBucket}}:${ZookBucket}:g" /opt/aws/etc/register_zookeeper.conf
-          sed -i "s:{{ZookDir}}:$ZOOK_DIR:g" /opt/aws/etc/register_zookeeper.conf
-          sed -i "s;{{ZookQueueInit}};${ZookQueueInit};g" /opt/aws/etc/register_zookeeper.conf
-          sed -i "s;{{ZookQueueReplace}};${ZookQueueReplace};g" /opt/aws/etc/register_zookeeper.conf
+
+          aws s3 cp s3://higs-public-blog/kafka/code/register_asg.py
+          /opt/aws/bin/register_asg.py
+
+          aws s3 cp s3://higs-public-blog/kafka/code/register_ec2.py
+          /opt/aws/bin/register_ec2.py
+
+          aws s3 cp s3://higs-public-blog/kafka/code/register_file.py
+          /opt/aws/bin/register_file.py
+
+          aws s3 cp s3://higs-public-blog/kafka/code/register_queue.py
+          /opt/aws/bin/register_queue.py
+
+          aws s3 cp s3://higs-public-blog/kafka/code/register_util.py
+          /opt/aws/bin/register_util.py
+
+          aws s3 cp s3://higs-public-blog/kafka/code/register_zookeeper.py
+          /opt/aws/bin/register_zookeeper.py
+
+          aws s3 cp s3://higs-public-blog/kafka/config/register_zookeeper.conf
+          /opt/aws/etc/register_zookeeper.conf
+
+          sed -i "s:{{ZookBucket}}:${ZookBucket}:g"
+          /opt/aws/etc/register_zookeeper.conf
+
+          sed -i "s:{{ZookDir}}:$ZOOK_DIR:g"
+          /opt/aws/etc/register_zookeeper.conf
+
+          sed -i "s;{{ZookQueueInit}};${ZookQueueInit};g"
+          /opt/aws/etc/register_zookeeper.conf
+
+          sed -i "s;{{ZookQueueReplace}};${ZookQueueReplace};g"
+          /opt/aws/etc/register_zookeeper.conf
+
           python /opt/aws/bin/register_zookeeper.py
+
 
           # Start Zookeeper
+
           service zookeeper start
 
+
           # Perform ensemble configuration
+
           python /opt/aws/bin/register_zookeeper.py
 
+
           # Start Zookeeper health check
+
           service check_zookeeper start
+
           sleep 10
 
-          # Tag the Zookeepers
-          INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-          REGION=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | grep '\"region\"' | cut -d\" -f4)
-          ZOOKEEPER_ID=$(cat /var/zookeeper/myid)
-          aws ec2 create-tags --region $REGION --resources $INSTANCE_ID --tags Key=ApacheId,Value=$ZOOKEEPER_ID
-          aws ec2 describe-tags --region $REGION --filter "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=ApacheId"
 
+          # Tag the Zookeepers
+
+          INSTANCE_ID=$(curl -s
+          http://169.254.169.254/latest/meta-data/instance-id)
+
+          REGION=$(curl -s
+          http://169.254.169.254/latest/dynamic/instance-identity/document |
+          grep '\"region\"' | cut -d\" -f4)
+
+          ZOOKEEPER_ID=$(cat /var/zookeeper/myid)
+
+          aws ec2 create-tags --region $REGION --resources $INSTANCE_ID --tags
+          Key=ApacheId,Value=$ZOOKEEPER_ID
+
+          aws ec2 describe-tags --region $REGION --filter
+          "Name=resource-id,Values=$INSTANCE_ID" "Name=key,Values=ApacheId"
 Outputs:
   ZookSecurityGroupId:
     Description: Security group ID for Zookeeper
-    Value: !GetAtt ZookSecurityGroup.GroupId
+    Value: !GetAtt
+      - ZookSecurityGroup
+      - GroupId
   ZookLoadBalancerSecurityGroupId:
     Description: Security group ID for Zookeeper ELB
-    Value: !GetAtt ZookLoadBalancerSecurityGroup.GroupId
+    Value: !GetAtt
+      - ZookLoadBalancerSecurityGroup
+      - GroupId
   ZookQueueInitUrl:
     Description: SQS Queue URL
     Value: !Ref ZookQueueInit
   ZookQueueInitArn:
     Description: SQS Queue ARN
-    Value: !GetAtt ZookQueueInit.Arn
+    Value: !GetAtt
+      - ZookQueueInit
+      - Arn
   ZookQueueInitName:
     Description: SQS Queue Name
-    Value: !GetAtt ZookQueueInit.QueueName
+    Value: !GetAtt
+      - ZookQueueInit
+      - QueueName
   ZookQueueReplaceUrl:
     Description: SQS Queue URL
     Value: !Ref ZookQueueReplace
   ZookQueueReplaceArn:
     Description: SQS Queue ARN
-    Value: !GetAtt ZookQueueReplace.Arn
+    Value: !GetAtt
+      - ZookQueueReplace
+      - Arn
   ZookQueueReplaceName:
     Description: SQS Queue Name
-    Value: !GetAtt ZookQueueReplace.QueueName
+    Value: !GetAtt
+      - ZookQueueReplace
+      - QueueName
   ZookLoadBalancerId:
     Description: Load balancer ID for zookeeper
     Value: !Ref ZookLoadBalancer
   ZookLoadBalancerName:
     Description: Load balancer DNS name for zookeeper
-    Value: !GetAtt ZookLoadBalancer.DNSName
+    Value: !GetAtt
+      - ZookLoadBalancer
+      - DNSName
