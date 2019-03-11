@@ -44,7 +44,7 @@ Parameters:
     Description: Retention of Kafka data in hours
     Type: String
     Default: 24
-  
+
   KafkaBucketName:
     Description: Bucket for configurations
     Type: String
@@ -57,7 +57,7 @@ Parameters:
   KafkaDownloadUrl:
     Description: URL from which to download the Kafka tarball
     Type: String
-    Default: http://apache.osuosl.org/kafka/0.9.0.1/kafka_2.11-0.9.0.1.tgz
+    Default: http://apache.osuosl.org/kafka/0.11.0.3/kafka_2.11-0.11.0.3.tgz
 
   # Parameters: Security Group
   KafkaAllowedRangeApp:
@@ -213,9 +213,9 @@ Mappings:
       HVM64: ami-f173cc91
       HVMG2: ami-31912f51
     us-west-1:
-      PV64: ami-f25a0892
-      HVM64: ami-165a0876
-      HVMG2: ami-0a9dcf6a
+      PV64: ami-09bfcadb25ee95bec
+      HVM64: ami-09bfcadb25ee95bec
+      HVMG2: ami-09bfcadb25ee95bec
     ca-central-1:
       PV64: _unsupported
       HVM64: ami-ebed508f
@@ -280,7 +280,7 @@ Resources:
       MessageRetentionPeriod: 600
       QueueName: KafkaInit
       ReceiveMessageWaitTimeSeconds: 5
-      VisibilityTimeout: 1
+      VisibilityTimeout: 0
 
   # Security groups
   KafkaSecurityGroup:
@@ -291,6 +291,18 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
+          CidrIp: !Ref KafkaAllowedRangeSSH
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref KafkaAllowedRangeSSH
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref KafkaAllowedRangeSSH
+        - IpProtocol: tcp
+          FromPort: 1024
+          ToPort: 65535
           CidrIp: !Ref KafkaAllowedRangeSSH
         - IpProtocol: tcp
           FromPort: 9092
@@ -406,9 +418,7 @@ Resources:
       PolicyDocument:
         Statement:
         - Action:
-          - sqs:SendMessage
-          - sqs:ReceiveMessage
-          - sqs:DeleteMessage
+          - sqs:*
           Effect: Allow
           Resource: !GetAtt KafkaQueue.Arn
         Version: '2012-10-17'
@@ -432,6 +442,23 @@ Resources:
       Roles:
       - !Ref KafkaRole
     Type: "AWS::IAM::Policy"
+  ZookPolicy8:
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - 'higs-public-blog/kafka'
+                - /*
+        Version: 2012-10-17
+      PolicyName: ZookPolicyS3Get
+      Roles:
+        - !Ref KafkaRole
+    Type: 'AWS::IAM::Policy'
 
   # Instance Profiles
   KafkaInstanceProfile:
@@ -499,7 +526,7 @@ Resources:
   KafkaLaunchConfiguration:
     Type: "AWS::AutoScaling::LaunchConfiguration"
     Properties:
-      AssociatePublicIpAddress: false
+      AssociatePublicIpAddress: true
       BlockDeviceMappings:
       - DeviceName: /dev/sdf
         Ebs:
@@ -527,6 +554,11 @@ Resources:
 
           # Kafka 10 requires Java 1.8
           yum install java-1.8.0 -y
+          yum install python-pip python3-wheel -y
+
+          pip install boto3
+
+          yum install nmap-ncat -y
 
           # Cloudwatch Logs
           yum install awslogs -y

@@ -33,7 +33,7 @@ Parameters:
   ZookDesiredCapacity:
     Description: Desired number of Zookeeper instances
     Type: String
-  
+
   ZookBucketName:
     Description: Bucket for configurations
     Type: String
@@ -42,7 +42,7 @@ Parameters:
   ZookDownloadUrl:
     Description: URL from which to download the Kafka tarball
     Type: String
-    Default: http://apache.osuosl.org/zookeeper/zookeeper-3.4.10/zookeeper-3.4.10.tar.gz
+    Default: http://apache.osuosl.org/zookeeper/zookeeper-3.4.13/zookeeper-3.4.13.tar.gz
 
   # Parameters: Security groups
   ZookAllowedRangeApp:
@@ -186,9 +186,9 @@ Mappings:
 
   AWSRegionArch2AMI:
     us-east-1:
-      PV64: ami-7a3dd76c
-      HVM64: ami-0b33d91d
-      HVMG2: ami-bb18efad
+      PV64: ami-0d19f5402a2c1c6bc
+      HVM64: ami-0d19f5402a2c1c6bc
+      HVMG2: ami-0d19f5402a2c1c6bc
     us-east-2:
       PV64: _unsupported
       HVM64: ami-c55673a0
@@ -198,9 +198,9 @@ Mappings:
       HVM64: ami-f173cc91
       HVMG2: ami-31912f51
     us-west-1:
-      PV64: ami-f25a0892
-      HVM64: ami-165a0876
-      HVMG2: ami-0a9dcf6a
+      PV64: ami-09bfcadb25ee95bec
+      HVM64: ami-09bfcadb25ee95bec
+      HVMG2: ami-09bfcadb25ee95bec
     ca-central-1:
       PV64: _unsupported
       HVM64: ami-ebed508f
@@ -256,7 +256,7 @@ Resources:
     Properties:
       BucketName: !Ref ZookBucketName
     Type: "AWS::S3::Bucket"
-  
+
   # SQS queues
   ZookQueueInit:
     Type: "AWS::SQS::Queue"
@@ -265,7 +265,7 @@ Resources:
       MessageRetentionPeriod: 600
       QueueName: ZookQueueInit
       ReceiveMessageWaitTimeSeconds: 5
-      VisibilityTimeout: 1
+      VisibilityTimeout: 0
 
   ZookQueueReplace:
     Type: "AWS::SQS::Queue"
@@ -274,7 +274,7 @@ Resources:
       MessageRetentionPeriod: 600
       QueueName: ZookQueueReplace
       ReceiveMessageWaitTimeSeconds: 5
-      VisibilityTimeout: 1
+      VisibilityTimeout: 0
 
   # Security groups
   ZookSecurityGroup:
@@ -285,6 +285,18 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
+          CidrIp: !Ref ZookAllowedRangeSSH
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref ZookAllowedRangeSSH
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref ZookAllowedRangeSSH
+        - IpProtocol: tcp
+          FromPort: 1024
+          ToPort: 65535
           CidrIp: !Ref ZookAllowedRangeSSH
         - IpProtocol: tcp
           FromPort: 2180
@@ -433,9 +445,7 @@ Resources:
       PolicyDocument:
         Statement:
         - Action:
-          - sqs:SendMessage
-          - sqs:ReceiveMessage
-          - sqs:DeleteMessage
+          - sqs:*
           Effect: Allow
           Resource: !GetAtt ZookQueueInit.Arn
         Version: '2012-10-17'
@@ -449,9 +459,7 @@ Resources:
       PolicyDocument:
         Statement:
         - Action:
-          - sqs:SendMessage
-          - sqs:ReceiveMessage
-          - sqs:DeleteMessage
+          - sqs:*
           Effect: Allow
           Resource: !GetAtt ZookQueueReplace.Arn
         Version: '2012-10-17'
@@ -475,6 +483,23 @@ Resources:
       Roles:
       - !Ref ZookRole
     Type: "AWS::IAM::Policy"
+  ZookPolicy8:
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - 'higs-public-blog/kafka'
+                - /*
+        Version: 2012-10-17
+      PolicyName: ZookPolicyS3Get
+      Roles:
+        - !Ref ZookRole
+    Type: 'AWS::IAM::Policy'
 
   # Instance Profiles
   ZookInstanceProfile:
@@ -542,7 +567,7 @@ Resources:
   ZookLaunchConfiguration:
     Type: "AWS::AutoScaling::LaunchConfiguration"
     Properties:
-      AssociatePublicIpAddress: false
+      AssociatePublicIpAddress: true
       IamInstanceProfile: !Ref ZookInstanceProfile
       ImageId: !FindInMap [ AWSRegionArch2AMI, !Ref "AWS::Region", !FindInMap [ AWSInstanceType2Arch, !Ref ZookInstanceType, Arch ] ]
       InstanceMonitoring: true
@@ -557,6 +582,11 @@ Resources:
 
           # Kafka 10 requires Java 1.8
           yum install java-1.8.0 -y
+          yum install python-pip python3-wheel -y
+
+          pip install boto3
+
+          yum install nmap-ncat -y
 
           # Cloudwatch Logs
           yum install awslogs -y
